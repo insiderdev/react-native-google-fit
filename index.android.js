@@ -1,7 +1,7 @@
 'use strict'
-import { DeviceEventEmitter, NativeModules } from 'react-native';
+import { DeviceEventEmitter, NativeModules } from 'react-native'
 
-import PossibleScopes from './src/scopes';
+import PossibleScopes from './src/scopes'
 import {
   buildDailySteps,
   isNil,
@@ -11,7 +11,7 @@ import {
   prepareResponse,
   prepareHydrationResponse,
   prepareDeleteOptions,
-} from './src/utils';
+} from './src/utils'
 
 const googleFit = NativeModules.RNGoogleFit
 
@@ -111,7 +111,7 @@ class RNGoogleFit {
         if (res.length > 0) {
           callback(
             false,
-            res.map(function(dev) {
+            res.map(function (dev) {
               const obj = {}
               obj.source =
                 dev.source.appPackage +
@@ -165,12 +165,18 @@ class RNGoogleFit {
    */
 
   getUserInputSteps = (options, callback) => {
-    const startDate = !isNil(options.startDate) ? Date.parse(options.startDate) : (new Date()).setHours(0, 0, 0, 0)
-    const endDate = !isNil(options.endDate) ? Date.parse(options.endDate) : (new Date()).valueOf()
-    googleFit.getUserInputSteps(startDate, endDate,
-      (msg) => callback(msg, false),
-      (res) => {
-        callback(null, res);
+    const startDate = !isNil(options.startDate)
+      ? Date.parse(options.startDate)
+      : new Date().setHours(0, 0, 0, 0)
+    const endDate = !isNil(options.endDate)
+      ? Date.parse(options.endDate)
+      : new Date().valueOf()
+    googleFit.getUserInputSteps(
+      startDate,
+      endDate,
+      msg => callback(msg, false),
+      res => {
+        callback(null, res)
       }
     )
   }
@@ -314,7 +320,10 @@ class RNGoogleFit {
               return el
             }
           })
-          callback(false, res.filter(day => !isNil(day)))
+          callback(
+            false,
+            res.filter(day => !isNil(day))
+          )
         } else {
           callback('There is no any weight data for this period', false)
         }
@@ -504,18 +513,13 @@ class RNGoogleFit {
     startDate = !isNil(startDate)
       ? Date.parse(startDate)
       : new Date().setHours(0, 0, 0, 0)
-    endDate = !isNil(endDate)
-      ? Date.parse(endDate)
-      : new Date().valueOf()
+    endDate = !isNil(endDate) ? Date.parse(endDate) : new Date().valueOf()
     googleFit.getHydrationSamples(
       startDate,
       endDate,
       msg => callback(true, msg),
       res => {
-        callback(
-          false,
-          prepareHydrationResponse(res)
-        )
+        callback(false, prepareHydrationResponse(res))
       }
     )
   }
@@ -542,6 +546,20 @@ class RNGoogleFit {
         callback(false, res)
       }
     )
+  }
+
+  submitWorkout(options) {
+    return new Promise((resolve, reject) => {
+      googleFit.submitWorkout(
+        options,
+        res => {
+          resolve(res)
+        },
+        error => {
+          reject(error)
+        }
+      )
+    })
   }
 }
 

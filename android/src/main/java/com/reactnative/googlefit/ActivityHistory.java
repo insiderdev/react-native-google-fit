@@ -11,16 +11,21 @@
 
 package com.reactnative.googlefit;
 
-import android.support.annotation.Nullable;
+import android.app.Activity;
 import android.text.TextUtils;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.fitness.Fitness;
 import com.google.android.gms.fitness.data.Bucket;
 import com.google.android.gms.fitness.data.DataPoint;
@@ -28,11 +33,15 @@ import com.google.android.gms.fitness.data.DataSet;
 import com.google.android.gms.fitness.data.DataType;
 import com.google.android.gms.fitness.data.Field;
 import com.google.android.gms.fitness.data.DataSource;
+import com.google.android.gms.fitness.data.Session;
 import com.google.android.gms.fitness.request.DataSourcesRequest;
 import com.google.android.gms.fitness.request.DataReadRequest;
+import com.google.android.gms.fitness.request.SessionInsertRequest;
 import com.google.android.gms.fitness.result.DataReadResult;
 import com.google.android.gms.fitness.result.DataSourcesResult;
 import com.google.android.gms.fitness.data.Device;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.text.DateFormat;
 import java.text.Format;
@@ -42,6 +51,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.text.SimpleDateFormat;
 import java.util.TimeZone;
@@ -143,5 +153,97 @@ public class ActivityHistory {
         }
         
         return results;
+    }
+
+    /**
+     * Submits the workout to Google Fit.
+     * // TODO: Create data class for options.
+     *
+     * @param options ReadableMap from JS with workout options.
+     *                startTime     - number - required - Value in milliseconds
+     *                endTime       - number - required - Value in milliseconds
+     *                activityType  - string - required - One of activity types
+     *                name          - string - optional - workout name
+     *                description   - string - optional
+     *                activeTime    - number - optional - value in milliseconds
+     *                calories      - number - optional
+     */
+    void submitWorkout(ReadableMap options) throws Exception {
+        // Let's check that all required parameters exist
+        if (!options.hasKey("startTime")) {
+            throw new Exception("startTime is required in options");
+        }
+
+        if(!options.hasKey("endTime")) {
+            throw new Exception("endTime is required in options");
+        }
+
+        if(!options.hasKey("activityType")) {
+            throw new Exception("activityType is required in options");
+        }
+
+        long startTime = (long) options.getDouble("startTime");
+        long endTime =  (long) options.getDouble("endTime");
+        String activityType = options.getString("activityType");
+
+        Session.Builder sessionBuilder = new Session.Builder()
+                .setActivity(activityType)
+                .setIdentifier(UUID.randomUUID().toString())
+                .setStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setEndTime(endTime, TimeUnit.MILLISECONDS);
+
+        // Add all optional parameters to the session builder
+        if(options.hasKey("name")) {
+            sessionBuilder.setName(options.getString("name"));
+        }
+
+        if(options.hasKey("description")) {
+            sessionBuilder.setDescription(options.getString("description"));
+        }
+
+        if(options.hasKey("activeTime")) {
+            sessionBuilder.setActiveTime((long) options.getDouble("activeTime"), TimeUnit.MILLISECONDS);
+        }
+
+        Session session = sessionBuilder.build();
+
+        SessionInsertRequest.Builder insertRequestBuilder = new SessionInsertRequest.Builder()
+                .setSession(session);
+
+        // Handle Calories
+        if(options.hasKey("calories")) {
+            float calories = (float) options.getDouble("calories");
+
+            DataSource caloriesDataSource = new DataSource.Builder()
+                    .setAppPackageName(GoogleFitPackage.PACKAGE_NAME)
+                    .setDataType(DataType.TYPE_CALORIES_EXPENDED)
+                    .setType(DataSource.TYPE_RAW)
+                    .build();
+
+            DataSet caloriesDataSet = DataSet.create(caloriesDataSource);
+            DataPoint caloriesDataPoint = caloriesDataSet.createDataPoint().setTimeInterval(startTime, endTime, TimeUnit.MILLISECONDS);
+            caloriesDataPoint.getValue(Field.FIELD_CALORIES).setFloat(calories);
+            caloriesDataSet.add(caloriesDataPoint);
+
+            insertRequestBuilder.addDataSet(caloriesDataSet);
+        }
+
+        SessionInsertRequest insertRequest = insertRequestBuilder.build();
+        Fitness.getSessionsClient(this.mReactContext, GoogleSignIn.getLastSignedInAccount(this.mReactContext))
+                .insertSession(insertRequest)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        // At this point, the session has been inserted and can be read.
+                        Log.i(TAG, "Session insert was successful!");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.i(TAG, "There was a problem inserting the session: " +
+                                e.getLocalizedMessage());
+                    }
+                });
     }
 }
